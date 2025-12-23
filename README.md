@@ -1,0 +1,583 @@
+[index.html.html](https://github.com/user-attachments/files/24305104/index.html.html)
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>末日倖存者 v12.0 - 完美體驗版</title>
+    <style>
+        :root { 
+            --bg: #050505; --panel: #141414; --text: #e0e0e0;
+            --hp: #ff4757; --hg: #ffa502; --wt: #1e90ff; 
+            --accent: #2ed573; --gold: #ffd32a; --boss: #a55eea;
+            --overlay: rgba(0,0,0,0.85);
+        }
+        body { 
+            margin: 0; background: var(--bg); color: var(--text); 
+            font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif; 
+            display: flex; justify-content: center; align-items: center; 
+            min-height: 100vh; transition: background 1s; user-select: none; overflow: hidden;
+        }
+        
+        /* CRT 掃描線濾鏡 */
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+            background-size: 100% 4px; pointer-events: none; z-index: 999;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        .game-box { 
+            width: 100%; max-width: 520px; 
+            background: var(--panel); border-radius: 12px; 
+            box-shadow: 0 0 40px rgba(0,0,0,0.8); 
+            border: 1px solid #333; position: relative; 
+            overflow: hidden; transition: 0.5s;
+        }
+
+        /* --- 特效層 --- */
+        .fx-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; overflow: hidden; }
+        
+        .fx-slash {
+            position: absolute; width: 140px; height: 140px;
+            border-bottom: 4px solid #fff; filter: blur(1px);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+            opacity: 0; transform: rotate(-45deg) scale(0.5);
+        }
+        @keyframes anim-slash {
+            0% { opacity: 0; transform: translate(-20px, -20px) rotate(var(--r)) scale(0.5); }
+            40% { opacity: 1; transform: translate(0, 0) rotate(var(--r)) scale(1.2); }
+            100% { opacity: 0; transform: translate(20px, 20px) rotate(var(--r)) scale(1.4); }
+        }
+        .play-slash { animation: anim-slash 0.2s ease-out; }
+
+        .fx-smash {
+            position: absolute; width: 80px; height: 80px;
+            border: 5px solid rgba(255,255,255,0.8); border-radius: 50%;
+            opacity: 0; transform: scale(0.1);
+        }
+        @keyframes anim-smash {
+            0% { opacity: 1; transform: scale(0.2); border-width: 15px; }
+            100% { opacity: 0; transform: scale(2.0); border-width: 0px; }
+        }
+        .play-smash { animation: anim-smash 0.3s ease-out; }
+
+        .fx-shoot {
+            position: absolute; width: 100%; height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(255,255,200,0.6) 0%, transparent 15%);
+            opacity: 0; mix-blend-mode: screen;
+        }
+        .play-shoot { animation: anim-shoot 0.1s ease-out; }
+        @keyframes anim-shoot { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+        .dmg-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: red; opacity: 0; pointer-events: none; z-index: 40;
+        }
+        .play-dmg { animation: flash-red 0.3s ease-out; }
+        @keyframes flash-red { 0% { opacity: 0.3; } 100% { opacity: 0; } }
+
+        /* 敵人動作 */
+        .enemy-atk-anim { animation: lunge 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes lunge { 0%,100% { transform: scale(1) translateY(0); } 50% { transform: scale(1.3) translateY(20px); } }
+        
+        .enemy-hit-anim { animation: hit-shake 0.3s; }
+        @keyframes hit-shake { 0%,100% { transform: translate(0,0); filter: brightness(1); } 25% { transform: translate(-5px, 5px); filter: brightness(5) sepia(1) hue-rotate(-50deg); } 75% { transform: translate(5px, -5px); } }
+
+        /* --- UI 組件 --- */
+        .scene-header { 
+            padding: 20px; text-align: center; position: relative; z-index: 2; 
+            background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); 
+            border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.5s; 
+        }
+        .scene-title { font-size: 20px; font-weight: 800; letter-spacing: 2px; color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
+        .scene-tag { font-size: 10px; color: var(--accent); letter-spacing: 1px; margin-top: 4px; display: block; }
+
+        .trait-badge {
+            background: var(--gold); color: #000; font-size: 11px; padding: 2px 8px; 
+            border-radius: 4px; font-weight: bold; position: absolute; top: 15px; right: 15px;
+            box-shadow: 0 0 10px rgba(255, 211, 42, 0.4);
+        }
+
+        .equip-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 15px; background: rgba(255,255,255,0.02); }
+        .equip-slot { 
+            background: #1a1a1a; border: 1px solid #333; border-radius: 8px; 
+            padding: 8px; display: flex; align-items: center; gap: 10px; transition: 0.3s; 
+        }
+        .equip-slot.updated { border-color: var(--gold); box-shadow: 0 0 10px var(--gold); }
+        .e-icon { font-size: 24px; background: #000; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; border-radius: 6px; }
+        .e-name { font-weight: bold; font-size: 13px; color: #ddd; display: block; }
+        .e-stat { font-size: 11px; color: var(--accent); }
+
+        .dashboard { display: grid; grid-template-columns: repeat(4, 1fr); background: #111; border-bottom: 1px solid #222; }
+        .dash-item { padding: 10px 5px; text-align: center; border-right: 1px solid #222; }
+        .dash-val { font-size: 15px; font-weight: bold; color: #fff; }
+        .dash-lbl { font-size: 10px; color: #666; }
+
+        .ap-bar { background: #0a0a0a; padding: 8px; text-align: center; display: flex; justify-content: center; gap: 5px; }
+        .ap-dot { width: 6px; height: 6px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 5px var(--accent); transition: 0.3s; }
+        .ap-off { background: #333; box-shadow: none; opacity: 0.3; }
+
+        .bars-container { padding: 15px; }
+        .bar-wrap { display: flex; align-items: center; margin-bottom: 6px; font-size: 11px; color: #aaa; }
+        .bar-track { flex: 1; height: 4px; background: #333; border-radius: 2px; overflow: hidden; margin: 0 8px; }
+        .bar-fill { height: 100%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        .bag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 15px 15px; }
+        .bag-item { background: #1c1c1c; padding: 6px 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #2a2a2a; font-size: 12px; }
+        .bag-btn { background: #333; border: none; color: #fff; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; }
+        .bag-btn:hover { background: #444; }
+
+        #combat-panel { margin: 0 15px 15px; padding: 15px; border-radius: 8px; background: linear-gradient(135deg, #2a0a0a, #1a0505); border: 1px solid var(--hp); display: none; text-align: center; }
+        .boss-mode { background: linear-gradient(135deg, #200a2a, #0f0518) !important; border-color: var(--boss) !important; }
+        .enemy-icon { font-size: 48px; display: block; margin-bottom: 10px; animation: float 3s infinite ease-in-out; }
+        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+        .log-box { height: 100px; overflow-y: auto; margin: 0 15px 15px; padding: 10px; background: #080808; border-radius: 6px; font-size: 12px; color: #999; border: 1px solid #222; font-family: monospace; }
+        .log-new { color: #fff; animation: fade-in 0.5s; }
+        @keyframes fade-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+
+        .actions-grid { padding: 0 15px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .btn-act { padding: 14px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; color: #fff; cursor: pointer; position: relative; overflow: hidden; transition: 0.2s; background: #333; }
+        .btn-act:hover:not(:disabled) { filter: brightness(1.2); transform: translateY(-1px); }
+        .btn-act:active:not(:disabled) { transform: translateY(1px); }
+        .btn-act:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        .c-exp { background: var(--wt); grid-column: span 2; }
+        .c-atk { background: var(--hp); width: 100%; margin-top: 10px; }
+        .c-rest { background: #57606f; grid-column: span 2; display: none; }
+        .c-restart { background: var(--accent); grid-column: span 2; display: none; color:#000; }
+        .c-book { background: #2f3640; color: #aaa; font-size: 11px; padding: 10px; }
+
+        .float-txt { position: absolute; font-weight: 900; font-size: 20px; pointer-events: none; animation: floatUp 0.8s forwards; z-index: 100; text-shadow: 1px 1px 0 #000; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(0.8); } 100% { opacity: 0; transform: translateY(-40px) scale(1.1); } }
+        .shake { animation: shake 0.4s; }
+        @keyframes shake { 0%,100% {transform:translateX(0)} 25% {transform:translateX(-4px)} 75% {transform:translateX(4px)} }
+
+        /* Modal */
+        .modal { position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:200; display:none; flex-direction:column; padding:20px; box-sizing:border-box; }
+        .modal-header { display:flex; justify-content:space-between; color:#fff; border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:10px; }
+        .gallery-content { flex:1; overflow-y:auto; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .g-item { background:#111; padding:8px; border:1px solid #333; border-radius:4px; font-size:11px; display:flex; gap:8px; align-items:center; }
+    </style>
+</head>
+<body>
+
+<div class="scanlines"></div>
+
+<div class="game-box" id="gameUI">
+    <div class="fx-layer">
+        <div id="fxContainer"></div>
+        <div id="dmgFX" class="dmg-overlay"></div>
+    </div>
+    
+    <div id="galleryModal" class="modal">
+        <div class="modal-header"><b>📖 生存圖鑑</b> <button style="background:none;border:none;color:#fff;font-size:20px" onclick="toggleGallery(false)">×</button></div>
+        <div style="display:flex; gap:5px; margin-bottom:10px">
+            <button class="bag-btn" style="flex:1" onclick="switchTab('items')">物資</button>
+            <button class="bag-btn" style="flex:1" onclick="switchTab('wep')">武器</button>
+            <button class="bag-btn" style="flex:1" onclick="switchTab('arm')">防具</button>
+        </div>
+        <div id="galleryContent" class="gallery-content"></div>
+    </div>
+
+    <div class="scene-header" id="sceneHeader">
+        <div class="scene-title" id="s-name">倖存者營地</div>
+        <span class="scene-tag" id="s-desc">SAFE ZONE</span>
+        <div id="traitBadge" class="trait-badge" style="display:none"></div>
+    </div>
+
+    <div class="equip-container">
+        <div class="equip-slot" id="slot-wep">
+            <div class="e-icon" id="wep-icon">✊</div>
+            <div><span class="e-name" id="wep-name">拳頭</span><span class="e-stat" id="wep-stat">ATK +0</span></div>
+        </div>
+        <div class="equip-slot" id="slot-arm">
+            <div class="e-icon" id="arm-icon">👕</div>
+            <div><span class="e-name" id="arm-name">破布</span><span class="e-stat" id="arm-stat">DEF +0</span></div>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <div class="dash-item"><span class="dash-val" id="d-day">1</span><span class="dash-lbl">天數</span></div>
+        <div class="dash-item"><span class="dash-val" id="d-atk">20</span><span class="dash-lbl">攻擊</span></div>
+        <div class="dash-item"><span class="dash-val" id="d-def">0</span><span class="dash-lbl">防禦</span></div>
+        <div class="dash-item"><span class="dash-val" id="d-rec">0</span><span class="dash-lbl">紀錄</span></div>
+    </div>
+
+    <div class="ap-bar" id="ap-bar"></div>
+
+    <div class="bars-container">
+        <div class="bar-wrap"><span>❤️</span><div class="bar-track"><div id="bar-hp" class="bar-fill" style="background:var(--hp); width:100%"></div></div><span id="txt-hp">100</span></div>
+        <div class="bar-wrap"><span>🍖</span><div class="bar-track"><div id="bar-hg" class="bar-fill" style="background:var(--hg); width:100%"></div></div></div>
+        <div class="bar-wrap"><span>💧</span><div class="bar-track"><div id="bar-wt" class="bar-fill" style="background:var(--wt); width:100%"></div></div></div>
+    </div>
+
+    <div class="bag-grid">
+        <div class="bag-item"><span>🥫 罐頭 <b id="n-food">0</b></span> <button class="bag-btn" onclick="use('food')">吃</button></div>
+        <div class="bag-item"><span>🥤 純水 <b id="n-water">0</b></span> <button class="bag-btn" onclick="use('water')">喝</button></div>
+        <div class="bag-item"><span>🩹 藥包 <b id="n-med">0</b></span> <button class="bag-btn" onclick="use('med')">治</button></div>
+        <div class="bag-item"><span>⚙️ 零件 <b id="n-part">0</b></span> <button class="bag-btn" onclick="upgrade()">強</button></div>
+    </div>
+
+    <div id="combat-panel">
+        <div class="enemy-icon" id="e-icon">🧟</div>
+        <h3 style="margin:5px 0; color:#fff" id="e-name">喪屍</h3>
+        <div class="bar-track" style="background:#000; height:6px"><div id="e-bar" class="bar-fill" style="background:var(--hp); width:100%"></div></div>
+        <button id="atkBtn" class="btn-act c-atk" onclick="attack()">⚔️ 攻擊 (ATTACK)</button>
+    </div>
+
+    <div class="log-box" id="log"></div>
+
+    <div class="actions-grid">
+        <button id="btn-exp" class="btn-act c-exp" onclick="explore()">🗺️ 前往探索 (-1 AP)</button>
+        <button id="btn-book" class="btn-act c-book" onclick="toggleGallery(true)">📖 生存圖鑑</button>
+        <button id="btn-rest" class="btn-act c-rest" onclick="rest()">💤 休息過夜 (Rest)</button>
+        <button id="btn-re" class="btn-act c-restart" onclick="location.reload()">🔄 重新開始 (Respawn)</button>
+    </div>
+</div>
+
+<script>
+    // --- 遊戲資料 ---
+    const Traits = [
+        { n: "普通人", d: "無特殊能力", atk:0, def:0, loot:0 },
+        { n: "拳擊手", d: "初始攻擊+5", atk:5, def:0, loot:0 },
+        { n: "拾荒者", d: "物資發現率UP", atk:0, def:0, loot:0.2 },
+        { n: "鐵壁", d: "初始防禦+2", atk:0, def:2, loot:0 },
+        { n: "幸運兒", d: "容易暴擊", atk:0, def:0, loot:0, crit: 0.2 }
+    ];
+
+    const Game = {
+        hp: 100, maxHp: 100, hg: 100, wt: 100,
+        food: 5, water: 5, med: 2, part: 0,
+        baseAtk: 20, baseDef: 0,
+        day: 1, ap: 5, night: false, trait: null,
+        record: localStorage.getItem('sv12_rec') || 0,
+        equip: { wep: { n: "赤手空拳", v: 0, i: "✊", fx: "smash" }, arm: { n: "破舊襯衫", v: 0, i: "👕" } }
+    };
+
+    const GearDB = {
+        wep: [
+            { n: "小刀", v: 5, i: "🔪", fx: "slash", minDay: 0 },
+            { n: "球棒", v: 12, i: "🏏", fx: "smash", minDay: 2 },
+            { n: "消防斧", v: 20, i: "🪓", fx: "slash", minDay: 5 },
+            { n: "手槍", v: 30, i: "🔫", fx: "shoot", minDay: 10 },
+            { n: "散彈槍", v: 45, i: "🥖", fx: "shoot", minDay: 15 },
+            { n: "電鋸", v: 65, i: "🪚", fx: "slash", minDay: 20 },
+            { n: "光劍", v: 99, i: "⚡", fx: "slash", minDay: 30 }
+        ],
+        arm: [
+            { n: "皮衣", v: 3, i: "🧥", minDay: 0 },
+            { n: "護具", v: 6, i: "🥋", minDay: 3 },
+            { n: "防彈衣", v: 12, i: "🦺", minDay: 8 },
+            { n: "鎮暴甲", v: 20, i: "🛡️", minDay: 15 },
+            { n: "動力服", v: 35, i: "🤖", minDay: 25 }
+        ],
+        items: [
+            { n: "罐頭", i: "🥫" }, { n: "水", i: "🥤" }, { n: "藥包", i: "🩹" }, { n: "零件", i: "⚙️" }
+        ]
+    };
+
+    const Scenes = [
+        { n: "廢棄超市", color: "#e67e22" }, { n: "市區醫院", color: "#3498db" },
+        { n: "軍事哨站", color: "#27ae60" }, { n: "荒野公路", color: "#7f8c8d" }
+    ];
+
+    let enemy = null;
+    const UI = document.getElementById('gameUI');
+    const Log = document.getElementById('log');
+
+    // --- 初始化 ---
+    function init() {
+        // 隨機抽取天賦
+        Game.trait = Traits[Math.floor(Math.random() * Traits.length)];
+        Game.baseAtk += Game.trait.atk;
+        Game.baseDef += Game.trait.def;
+        
+        const badge = document.getElementById('traitBadge');
+        badge.textContent = `天賦: ${Game.trait.n}`;
+        badge.style.display = 'block';
+        
+        updateUI();
+        addLog(`倖存者甦醒... 獲得天賦 [${Game.trait.n}]`, "#aaa");
+    }
+
+    function getTotalAtk() { return Game.baseAtk + Game.equip.wep.v; }
+    function getTotalDef() { return Game.baseDef + Game.equip.arm.v; }
+
+    function updateUI() {
+        setText('d-day', Game.day);
+        setText('d-atk', getTotalAtk());
+        setText('d-def', getTotalDef());
+        setText('d-rec', Game.record);
+        setText('txt-hp', Math.floor(Game.hp));
+        
+        setText('wep-name', Game.equip.wep.n);
+        setText('wep-stat', `ATK +${Game.equip.wep.v}`);
+        setText('wep-icon', Game.equip.wep.i);
+        setText('arm-name', Game.equip.arm.n);
+        setText('arm-stat', `DEF +${Game.equip.arm.v}`);
+        setText('arm-icon', Game.equip.arm.i);
+
+        setText('n-food', Game.food); setText('n-water', Game.water);
+        setText('n-med', Game.med); setText('n-part', Game.part);
+
+        setBar('bar-hp', Game.hp, Game.maxHp);
+        setBar('bar-hg', Game.hg, 100);
+        setBar('bar-wt', Game.wt, 100);
+
+        let apHtml = '';
+        for(let i=0; i<5; i++) apHtml += `<div class="ap-dot ${i>=Game.ap?'ap-off':''}"></div>`;
+        document.getElementById('ap-bar').innerHTML = apHtml;
+
+        if(Game.night) {
+            document.body.style.background = "#050510";
+            document.getElementById('sceneHeader').style.opacity = "0.3";
+            toggleDisplay('btn-exp', false);
+            toggleDisplay('btn-rest', true);
+        } else {
+            document.body.style.background = "#121212";
+            document.getElementById('sceneHeader').style.opacity = "1";
+            toggleDisplay('btn-exp', true);
+            toggleDisplay('btn-rest', false);
+        }
+
+        if(enemy) {
+            document.getElementById('combat-panel').style.display = 'block';
+            setText('e-name', enemy.name);
+            setText('e-icon', enemy.icon);
+            setBar('e-bar', enemy.hp, enemy.maxHp);
+            document.getElementById('combat-panel').className = enemy.isBoss ? 'boss-mode' : '';
+            toggleDisplay('btn-exp', false);
+            toggleDisplay('btn-book', false);
+        } else {
+            document.getElementById('combat-panel').style.display = 'none';
+            if(!Game.night) toggleDisplay('btn-exp', true);
+            document.getElementById('btn-exp').disabled = (Game.ap <= 0);
+            toggleDisplay('btn-book', true);
+        }
+    }
+
+    function explore() {
+        if(!checkAP()) return;
+        cost(8, 12);
+
+        if(Game.day % 10 === 0 && !enemy) { spawnBoss(); return; }
+
+        let s = Scenes[Math.floor(Math.random() * Scenes.length)];
+        setText('s-name', s.n);
+        document.getElementById('sceneHeader').style.background = `linear-gradient(180deg, ${s.color}cc, transparent)`;
+
+        let roll = Math.random();
+        if(roll < 0.5) {
+            spawnEnemy();
+        } else if (roll < 0.85) {
+            // 物資搜尋 (受天賦影響)
+            let lootBonus = Game.trait.loot || 0;
+            let loot = [];
+            if(Math.random() < 0.5 + lootBonus) { Game.food++; loot.push("罐頭"); }
+            if(Math.random() < 0.5 + lootBonus) { Game.water+=2; loot.push("水x2"); }
+            if(Math.random() < 0.45 + lootBonus) { Game.med++; loot.push("藥品"); }
+            if(Math.random() < 0.3 + lootBonus) { Game.part++; loot.push("零件"); }
+            
+            if(loot.length>0) { floatTxt("+物資", "#f1c40f"); addLog(`發現: ${loot.join(', ')}`, "#2ecc71"); }
+            else addLog("這裡空空如也...", "#7f8c8d");
+        } else {
+            findGear();
+        }
+        checkNight(); checkLife(); updateUI();
+    }
+
+    function findGear() {
+        let isWep = Math.random() < 0.6;
+        let list = isWep ? GearDB.wep : GearDB.arm;
+        let valid = list.filter(i => Game.day >= i.minDay);
+        let item = valid[Math.floor(Math.random() * valid.length)];
+        let current = isWep ? Game.equip.wep : Game.equip.arm;
+        
+        if (item.v > current.v) {
+            if(isWep) Game.equip.wep = item; else Game.equip.arm = item;
+            floatTxt("裝備升級!", "#00d2d3");
+            addLog(`✨ 裝備了 <b>${item.i} ${item.n}</b>`, "#00d2d3");
+            let slotId = isWep ? 'slot-wep' : 'slot-arm';
+            document.getElementById(slotId).classList.add('updated');
+            setTimeout(()=>document.getElementById(slotId).classList.remove('updated'), 500);
+        } else {
+            Game.part++;
+            addLog(`發現 ${item.n}，分解為零件。`, "#7f8c8d");
+        }
+    }
+
+    function spawnEnemy() {
+        let scale = 1 + (Game.day * 0.15);
+        enemy = {
+            name: "遊蕩喪屍", icon: "🧟",
+            hp: Math.floor(40 * scale), maxHp: Math.floor(40 * scale),
+            atk: Math.floor(8 * scale), isBoss: false
+        };
+        addLog("⚠️ 遭遇敵人！", "#e74c3c");
+    }
+
+    function spawnBoss() {
+        let scale = 1 + (Game.day * 0.25);
+        enemy = {
+            name: `變異體 TYPE-${Game.day}`, icon: "👹",
+            hp: Math.floor(150 * scale), maxHp: Math.floor(150 * scale),
+            atk: Math.floor(20 * scale), isBoss: true
+        };
+        addLog(`☠️ BOSS 降臨！`, "#8e44ad");
+        UI.classList.add('shake');
+        setTimeout(()=>UI.classList.remove('shake'), 500);
+    }
+
+    function playFX(type) {
+        const c = document.getElementById('fxContainer');
+        const el = document.createElement('div');
+        // 隨機旋轉
+        el.style.setProperty('--r', (Math.random()*90 - 45) + 'deg');
+        el.style.left = `calc(50% + ${Math.random()*40-20}px)`;
+        el.style.top = `calc(40% + ${Math.random()*40-20}px)`;
+        el.className = type === 'slash' ? 'fx-slash play-slash' : (type === 'shoot' ? 'fx-shoot play-shoot' : 'fx-smash play-smash');
+        c.appendChild(el);
+        setTimeout(()=>el.remove(), 400);
+    }
+
+    function attack() {
+        document.getElementById('atkBtn').disabled = true;
+        playFX(Game.equip.wep.fx || 'smash');
+
+        let totalAtk = getTotalAtk();
+        // 暴擊率 (基礎 10% + 天賦)
+        let critRate = 0.1 + (Game.trait.crit || 0);
+        let crit = Math.random() < critRate;
+        let dmg = totalAtk + Math.floor(Math.random() * 5);
+        if(crit) dmg = Math.floor(dmg * 1.5);
+        
+        const eIcon = document.getElementById('e-icon');
+        eIcon.classList.add('enemy-hit-anim');
+
+        enemy.hp -= dmg;
+        setTimeout(() => {
+            floatTxt(`-${dmg}`, "#e74c3c", "70%", "40%");
+            if(crit) floatTxt("CRIT!", "#f1c40f", "70%", "20%");
+            eIcon.classList.remove('enemy-hit-anim');
+            
+            if (enemy.hp <= 0) {
+                victory();
+                document.getElementById('atkBtn').disabled = false;
+            } else {
+                setTimeout(enemyTurn, 300);
+            }
+            updateUI();
+        }, 200);
+    }
+
+    function enemyTurn() {
+        const eIcon = document.getElementById('e-icon');
+        eIcon.classList.add('enemy-atk-anim');
+        
+        let eDmg = enemy.isBoss ? enemy.atk * 1.5 : enemy.atk;
+        if(Game.night) eDmg *= 1.5;
+        
+        // 閃避機制 (基礎 0% + 防禦/2 %)
+        let dodgeChance = Math.min(0.3, getTotalDef() * 0.01);
+        let isDodge = Math.random() < dodgeChance;
+
+        setTimeout(() => {
+            if(isDodge) {
+                floatTxt("MISS", "#2ecc71");
+                addLog("✨ 你閃過了攻擊！", "#2ecc71");
+            } else {
+                let take = Math.max(1, Math.floor(eDmg - (getTotalDef()*0.5)));
+                Game.hp -= take;
+                document.getElementById('dmgFX').classList.add('play-dmg');
+                floatTxt(`-${take}`, "#fff", "20%", "40%");
+                UI.classList.add('shake');
+            }
+            
+            setTimeout(() => {
+                document.getElementById('dmgFX').classList.remove('play-dmg');
+                UI.classList.remove('shake');
+                eIcon.classList.remove('enemy-atk-anim');
+                document.getElementById('atkBtn').disabled = false;
+                checkLife();
+                updateUI();
+            }, 300);
+        }, 200);
+    }
+
+    function victory() {
+        if (enemy.isBoss) {
+            floatTxt("BOSS擊殺!", "#8e44ad");
+            addLog("🏆 擊敗強敵！獲得大量資源！", "#8e44ad");
+            Game.baseAtk += 5; Game.food += 3; Game.med += 2;
+        } else {
+            addLog("戰鬥勝利。", "#2ecc71");
+            if(Math.random() < 0.4) { Game.part++; floatTxt("+零件", "#ccc"); }
+        }
+        enemy = null;
+        checkNight(); updateUI();
+    }
+
+    function use(t) {
+        if(Game[t] <= 0) return;
+        Game[t]--;
+        if(t==='food') { Game.hg = Math.min(100, Game.hg+40); Game.hp = Math.min(Game.maxHp, Game.hp+5); floatTxt("+飽食", "#f39c12"); }
+        if(t==='water') { Game.wt = Math.min(100, Game.wt+50); floatTxt("+水分", "#3498db"); }
+        if(t==='med') { Game.hp = Math.min(Game.maxHp, Game.hp+60); floatTxt("+生命", "#e74c3c"); }
+        updateUI();
+    }
+
+    function upgrade() {
+        if(Game.part >= 3) {
+            Game.part -= 3;
+            Game.baseAtk += 2; Game.baseDef += 1;
+            floatTxt("能力提升", "#2ecc71");
+            addLog("消耗零件強化了基礎屬性。", "#2ecc71");
+        } else addLog("需要 3 個零件。", "#777");
+        updateUI();
+    }
+
+    function rest() {
+        Game.day++; Game.ap = 5; Game.night = false;
+        cost(15, 20);
+        addLog(`🌅 第 ${Game.day} 天。`, "#fff");
+        if(Game.hg > 0 && Game.wt > 0) Game.hp = Math.min(Game.maxHp, Game.hp + 10);
+        checkLife(); updateUI();
+    }
+
+    function toggleGallery(show) { document.getElementById('galleryModal').style.display = show ? 'flex' : 'none'; if(show) switchTab('items'); }
+    function switchTab(type) {
+        document.getElementById('galleryContent').innerHTML = '';
+        let list = type==='items'?GearDB.items:(type==='wep'?GearDB.wep:GearDB.arm);
+        list.forEach(i => {
+            const d = document.createElement('div');
+            d.className='g-item';
+            d.innerHTML = `<div style="font-size:20px">${i.i}</div><div><b>${i.n}</b><br><span style="color:#777">${i.v||''}</span></div>`;
+            document.getElementById('galleryContent').appendChild(d);
+        });
+    }
+
+    function checkAP() { if(Game.ap > 0) { Game.ap--; return true; } return false; }
+    function checkNight() { if(Game.ap <= 0 && !enemy) { Game.night = true; addLog("🌑 夜幕降臨...", "#9b59b6"); } }
+    function cost(h,w) { Game.hg-=h; Game.wt-=w; }
+    function checkLife() {
+        if(Game.hg<=0) Game.hp-=10; if(Game.wt<=0) Game.hp-=15;
+        if(Game.hp<=0) {
+            Game.hp=0; updateUI();
+            addLog("💀 倖存者死亡。", "#c0392b");
+            if(Game.day > Game.record) localStorage.setItem('sv12_rec', Game.day);
+            document.querySelectorAll('.btn-act').forEach(b=>b.style.display='none');
+            document.getElementById('btn-re').style.display='grid';
+        }
+    }
+    function setText(id,t) { document.getElementById(id).textContent=t; }
+    function setBar(id,v,m) { document.getElementById(id).style.width=(v/m*100)+'%'; }
+    function toggleDisplay(id,s) { document.getElementById(id).style.display=s?'block':'none'; }
+    function addLog(m,c) { const d=document.createElement('div'); d.className='log-new'; d.innerHTML=`> <span style="color:${c}">${m}</span>`; Log.insertBefore(d,Log.firstChild); }
+    function floatTxt(t,c,l,tp) { const e=document.createElement('div'); e.className='float-txt'; e.textContent=t; e.style.color=c; e.style.left=l||"50%"; e.style.top=tp||"40%"; e.style.marginLeft=(Math.random()*40-20)+"px"; UI.appendChild(e); setTimeout(()=>e.remove(),800); }
+
+    init();
+</script>
+</body>
+</html>
